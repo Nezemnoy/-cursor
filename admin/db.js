@@ -92,6 +92,44 @@ export function deleteModel(id) {
   d.close();
 }
 
+// --- Providers ---
+
+export function getProviders() {
+  const d = db();
+  const rows = d.prepare("SELECT * FROM providers ORDER BY priority ASC").all();
+  d.close();
+  return rows;
+}
+
+export function addProvider({ name, baseUrl, apiKey = "", priority }) {
+  const d = db();
+  const maxPriority = d.prepare("SELECT COALESCE(MAX(priority), -1) AS m FROM providers").get().m;
+  const p = priority ?? maxPriority + 1;
+  const info = d.prepare("INSERT INTO providers (name, base_url, api_key, priority, enabled) VALUES (?, ?, ?, ?, 1)")
+    .run(name, baseUrl, apiKey, p);
+  const row = d.prepare("SELECT * FROM providers WHERE id = ?").get(info.lastInsertRowid);
+  d.close();
+  return row;
+}
+
+export function updateProvider(id, updates) {
+  const d = db();
+  if (updates.name     !== undefined) d.prepare("UPDATE providers SET name     = ? WHERE id = ?").run(updates.name, id);
+  if (updates.baseUrl  !== undefined) d.prepare("UPDATE providers SET base_url = ? WHERE id = ?").run(updates.baseUrl, id);
+  if (updates.apiKey   !== undefined) d.prepare("UPDATE providers SET api_key  = ? WHERE id = ?").run(updates.apiKey, id);
+  if (updates.priority !== undefined) d.prepare("UPDATE providers SET priority = ? WHERE id = ?").run(updates.priority, id);
+  if (updates.enabled  !== undefined) d.prepare("UPDATE providers SET enabled  = ? WHERE id = ?").run(updates.enabled ? 1 : 0, id);
+  const row = d.prepare("SELECT * FROM providers WHERE id = ?").get(id);
+  d.close();
+  return row ?? null;
+}
+
+export function deleteProvider(id) {
+  const d = db();
+  d.prepare("DELETE FROM providers WHERE id = ?").run(id);
+  d.close();
+}
+
 // --- Recipients ---
 
 export function getRecipients() {

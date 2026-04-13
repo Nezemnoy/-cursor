@@ -9,6 +9,7 @@ import {
   getAllSettings, saveSettings,
   getFeeds, addFeed, updateFeed, deleteFeed,
   getModels, addModel, updateModel, deleteModel,
+  getProviders, addProvider, updateProvider, deleteProvider,
   getRecipients, addRecipient, updateRecipient, deleteRecipient,
   getRuns, getRunLog, createRun, appendRunLog, finishRun,
 } from "./db.js";
@@ -76,6 +77,29 @@ app.put("/api/models/:id", (req, res) => {
 
 app.delete("/api/models/:id", (req, res) => {
   deleteModel(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+// ── Providers ─────────────────────────────────────────────────────────────────
+
+app.get("/api/providers", (_req, res) => {
+  res.json(getProviders());
+});
+
+app.post("/api/providers", (req, res) => {
+  const { name, baseUrl, apiKey, priority } = req.body ?? {};
+  if (!name || !baseUrl) return res.status(400).json({ error: "name and baseUrl required" });
+  res.json(addProvider({ name, baseUrl, apiKey, priority }));
+});
+
+app.put("/api/providers/:id", (req, res) => {
+  const row = updateProvider(Number(req.params.id), req.body);
+  if (!row) return res.status(404).json({ error: "Provider not found" });
+  res.json(row);
+});
+
+app.delete("/api/providers/:id", (req, res) => {
+  deleteProvider(Number(req.params.id));
   res.json({ ok: true });
 });
 

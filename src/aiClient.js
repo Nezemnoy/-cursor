@@ -1,11 +1,10 @@
 import OpenAI from "openai";
 import { getConfig } from "./config.js";
 
-export function getAiClient(apiKey) {
-  const key = apiKey ?? getConfig().apiKey;
+export function getAiClient(baseURL, apiKey) {
   return new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey: key,
+    baseURL,
+    apiKey,
     defaultHeaders: {
       "HTTP-Referer": "https://github.com/ai-news-digest",
       "X-Title": "AI News Digest",
@@ -26,6 +25,13 @@ function isQuotaError(err) {
   );
 }
 
+function isProviderError(err) {
+  // Treat auth errors and provider-level failures as "skip provider"
+  if (err?.status === 401 || err?.status === 403) return true;
+  const msg = (err?.message ?? "").toLowerCase();
+  return msg.includes("invalid api key") || msg.includes("authentication");
+}
+
 // Retries fn() on 429 rate-limit errors for a single model.
 export async function withRetry(fn, maxRetries) {
   const retries = maxRetries ?? getConfig().maxRetries;
@@ -44,22 +50,44 @@ export async function withRetry(fn, maxRetries) {
   }
 }
 
-// Iterates through configured models in priority order.
-// Moves to the next model on quota/credits errors; re-raises other errors.
+// Iterates enabled providers (by priority), then models within each provider.
+// On quota/unavailability: try next model → then next provider.
 export async function withModelFallback(fn) {
-  const { models, apiKey } = getConfig();
-  const ai = getAiClient(apiKey);
+  const { providers, models, apiKey: globalApiKey } = getConfig();
 
-  for (let i = 0; i < models.length; i++) {
-    const model = models[i];
-    try {
-      return await withRetry(() => fn(ai, model));
-    } catch (err) {
-      if (isQuotaError(err) && i < models.length - 1) {
-        console.warn(`  Model "${model}" quota/credits exhausted, switching to "${models[i + 1]}"…`);
-        continue;
+  const enabledProviders = providers.filter((p) => p.enabled);
+  if (enabledProviders.length === 0) throw new Error("No enabled providers configured");
+
+  for (const provider of enabledProviders) {
+    const apiKey = provider.apiKey || (provider.name === "OpenRouter" ? globalApiKey : "");
+    if (!apiKey) {
+      console.warn(`  Provider "${provider.name}" skipped — no API key set`);
+      continue;
+    }
+
+    const ai = getAiClient(provider.baseUrl, apiKey);
+
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
+      try {
+        return await withRetry(() => fn(ai, model));
+      } catch (err) {
+        if (isProviderError(err)) {
+          console.warn(`  Provider "${provider.name}" auth failed, switching provider…`);
+          break; // try next provider
+        }
+        if (isQuotaError(err)) {
+          if (i < models.length - 1) {
+            console.warn(`  [${provider.name}] Model "${model}" unavailable, trying "${models[i + 1]}"…`);
+            continue;
+          }
+          console.warn(`  [${provider.name}] All models exhausted, switching provider…`);
+          break; // try next provider
+        }
+        throw err; // unexpected error — surface it
       }
-      throw err;
     }
   }
+
+  throw new Error("All providers and models exhausted — check API keys and model availability");
 }

@@ -20,6 +20,11 @@ export const addModel     = (data)   => req("/api/models",       { method: "POST
 export const updateModel  = (id, d)  => req(`/api/models/${id}`, { method: "PUT",    body: JSON.stringify(d) });
 export const deleteModel  = (id)     => req(`/api/models/${id}`, { method: "DELETE" });
 
+export const getProviders    = ()       => req("/api/providers");
+export const addProvider     = (data)   => req("/api/providers",        { method: "POST",   body: JSON.stringify(data) });
+export const updateProvider  = (id, d)  => req(`/api/providers/${id}`,  { method: "PUT",    body: JSON.stringify(d) });
+export const deleteProvider  = (id)     => req(`/api/providers/${id}`,  { method: "DELETE" });
+
 export const getRecipients   = ()       => req("/api/recipients");
 export const addRecipient    = (data)   => req("/api/recipients",       { method: "POST",   body: JSON.stringify(data) });
 export const updateRecipient = (id, d)  => req(`/api/recipients/${id}`, { method: "PUT",    body: JSON.stringify(d) });

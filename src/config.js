@@ -103,6 +103,13 @@ const DEFAULTS = {
   promptSynthesize: DEFAULT_PROMPTS.synthesize,
 };
 
+const DEFAULT_PROVIDERS = [
+  { name: "OpenRouter",       base_url: "https://openrouter.ai/api/v1",                              priority: 0 },
+  { name: "Google AI Studio", base_url: "https://generativelanguage.googleapis.com/v1beta/openai/",  priority: 1 },
+  { name: "Groq",             base_url: "https://api.groq.com/openai/v1",                             priority: 2 },
+  { name: "DeepSeek",        base_url: "https://api.deepseek.com/v1",                                priority: 3 },
+];
+
 export function openAndInit() {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
   const db = new Database(DB_PATH);
@@ -121,6 +128,14 @@ export function openAndInit() {
     CREATE TABLE IF NOT EXISTS models (
       id       INTEGER PRIMARY KEY AUTOINCREMENT,
       model_id TEXT NOT NULL,
+      priority INTEGER NOT NULL DEFAULT 0,
+      enabled  INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE TABLE IF NOT EXISTS providers (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      name     TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      api_key  TEXT NOT NULL DEFAULT '',
       priority INTEGER NOT NULL DEFAULT 0,
       enabled  INTEGER NOT NULL DEFAULT 1
     );
@@ -204,6 +219,19 @@ export function openAndInit() {
     });
   }
 
+  // Seed providers on first boot, migrating existing OpenRouter api key
+  const providersCount = db.prepare("SELECT COUNT(*) AS n FROM providers").get().n;
+  if (providersCount === 0) {
+    const existingApiKey = db.prepare("SELECT value FROM settings WHERE key = 'apiKey'").get()?.value ?? "";
+    const stmt = db.prepare("INSERT INTO providers (name, base_url, api_key, priority, enabled) VALUES (?, ?, ?, ?, 1)");
+    db.transaction((providers) => {
+      for (const p of providers) {
+        const key = p.name === "OpenRouter" ? (existingApiKey || "") : "";
+        stmt.run(p.name, p.base_url, key, p.priority);
+      }
+    })(DEFAULT_PROVIDERS);
+  }
+
   // Seed recipients — migrate from settings.recipients if available
   const recipientsCount = db.prepare("SELECT COUNT(*) AS n FROM recipients").get().n;
   if (recipientsCount === 0) {
@@ -258,7 +286,12 @@ export function getConfig() {
       .all()
       .map((r) => r.email);
 
-    _cache = build(s, feeds, models, recipients);
+    const providers = db
+      .prepare("SELECT id, name, base_url, api_key, priority, enabled FROM providers ORDER BY priority ASC")
+      .all()
+      .map((r) => ({ id: r.id, name: r.name, baseUrl: r.base_url, apiKey: r.api_key, priority: r.priority, enabled: r.enabled === 1 }));
+
+    _cache = build(s, feeds, models, recipients, providers);
   } catch (err) {
     console.warn("SQLite config unavailable, using env defaults:", err.message);
     _cache = build(
@@ -266,6 +299,7 @@ export function getConfig() {
       DEFAULT_FEEDS.map((f) => ({ url: f.url, source: f.name })),
       [process.env.OPENROUTER_MODEL ?? DEFAULT_MODELS[0]],
       (process.env.DIGEST_RECIPIENTS ?? "").split(",").map((r) => r.trim()).filter(Boolean),
+      [{ id: 1, name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY ?? "", priority: 0, enabled: true }],
     );
   } finally {
     db?.close();
@@ -274,8 +308,9 @@ export function getConfig() {
   return _cache;
 }
 
-function build(s, feeds, models, recipients) {
+function build(s, feeds, models, recipients, providers = []) {
   return {
+    providers: providers.length > 0 ? providers : DEFAULT_PROVIDERS.map((p, i) => ({ ...p, id: i + 1, apiKey: "", enabled: true })),
     feeds,
     models:     models.length > 0 ? models : [s.model ?? process.env.OPENROUTER_MODEL ?? DEFAULTS.model],
     recipients: recipients.length > 0 ? recipients

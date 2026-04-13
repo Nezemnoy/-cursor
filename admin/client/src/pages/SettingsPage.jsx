@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getSettings, saveSettings,
   getModels, addModel, updateModel, deleteModel,
+  getProviders, addProvider, updateProvider, deleteProvider,
   getRecipients, addRecipient, updateRecipient, deleteRecipient,
 } from "../api.js";
 
-const TABS = ["AI", "Prompts", "Filter", "Email", "Scheduler"];
+const TABS = ["AI", "Providers", "Prompts", "Filter", "Email", "Scheduler"];
 
 // ── Models sub-component ──────────────────────────────────────────────────────
 
@@ -122,6 +123,185 @@ function ModelsSection({ notify }) {
         <p className="hint" style={{ marginTop: 6 }}>
           Find model IDs at <a href="https://openrouter.ai/models" target="_blank" rel="noreferrer">openrouter.ai/models</a>
         </p>
+      </form>
+    </div>
+  );
+}
+
+// ── Providers sub-component ───────────────────────────────────────────────────
+
+function ProvidersSection({ notify }) {
+  const [providers, setProviders] = useState([]);
+  const [form,      setForm]      = useState({ name: "", baseUrl: "", apiKey: "" });
+  const [adding,    setAdding]    = useState(false);
+  const [editKey,   setEditKey]   = useState({}); // id → draft api key
+  const [showKey,   setShowKey]   = useState({}); // id → bool
+
+  const load = useCallback(async () => {
+    try { setProviders(await getProviders()); } catch { notify("Failed to load providers", "error"); }
+  }, [notify]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleToggle(p) {
+    try {
+      const updated = await updateProvider(p.id, { enabled: !p.enabled });
+      setProviders((prev) => prev.map((x) => (x.id === p.id ? { ...x, enabled: updated.enabled } : x)));
+    } catch { notify("Update failed", "error"); }
+  }
+
+  async function handlePriority(p, delta) {
+    try {
+      const updated = await updateProvider(p.id, { priority: p.priority + delta });
+      setProviders((prev) =>
+        prev.map((x) => (x.id === p.id ? { ...x, priority: updated.priority } : x))
+          .sort((a, b) => a.priority - b.priority)
+      );
+    } catch { notify("Update failed", "error"); }
+  }
+
+  async function handleSaveKey(p) {
+    const key = editKey[p.id] ?? "";
+    try {
+      await updateProvider(p.id, { apiKey: key });
+      setProviders((prev) => prev.map((x) => (x.id === p.id ? { ...x, api_key: key } : x)));
+      setEditKey((prev) => { const n = { ...prev }; delete n[p.id]; return n; });
+      notify("API key saved");
+    } catch { notify("Save failed", "error"); }
+  }
+
+  async function handleDelete(id) {
+    if (!confirm("Delete this provider?")) return;
+    try {
+      await deleteProvider(id);
+      setProviders((prev) => prev.filter((p) => p.id !== id));
+      notify("Provider deleted");
+    } catch { notify("Delete failed", "error"); }
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    if (!form.name.trim() || !form.baseUrl.trim()) return;
+    setAdding(true);
+    try {
+      const p = await addProvider({ name: form.name.trim(), baseUrl: form.baseUrl.trim(), apiKey: form.apiKey.trim() });
+      setProviders((prev) => [...prev, p]);
+      setForm({ name: "", baseUrl: "", apiKey: "" });
+      notify("Provider added");
+    } catch { notify("Add failed", "error"); }
+    finally { setAdding(false); }
+  }
+
+  const isEditing = (id) => editKey[id] !== undefined;
+
+  return (
+    <div>
+      <div style={{ fontWeight: 600, marginBottom: 10 }}>AI Providers (fallback order)</div>
+      <p className="hint" style={{ marginBottom: 12 }}>
+        Providers are tried top-to-bottom. If all models of a provider fail, the next provider is used.
+        Leave API key blank to skip a provider.
+      </p>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="table-wrap">
+          {providers.length === 0 ? (
+            <div className="card-body text-muted">No providers configured.</div>
+          ) : (
+            <table>
+              <thead>
+                <tr><th>Order</th><th>Name</th><th>Base URL</th><th>API Key</th><th>On</th><th></th></tr>
+              </thead>
+              <tbody>
+                {providers.map((p, idx) => (
+                  <tr key={p.id}>
+                    <td>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button className="btn btn-ghost btn-sm" disabled={idx === 0}
+                          onClick={() => handlePriority(p, -1)}>↑</button>
+                        <button className="btn btn-ghost btn-sm" disabled={idx === providers.length - 1}
+                          onClick={() => handlePriority(p, 1)}>↓</button>
+                      </div>
+                    </td>
+                    <td style={{ fontWeight: 500 }}>{p.name}</td>
+                    <td style={{ fontFamily: "monospace", fontSize: 12 }}>{p.base_url}</td>
+                    <td style={{ minWidth: 220 }}>
+                      {isEditing(p.id) ? (
+                        <div className="input-row" style={{ gap: 4 }}>
+                          <input
+                            type={showKey[p.id] ? "text" : "password"}
+                            value={editKey[p.id]}
+                            onChange={(e) => setEditKey((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                            style={{ fontFamily: "monospace", fontSize: 12 }}
+                          />
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => setShowKey((prev) => ({ ...prev, [p.id]: !prev[p.id] }))}>
+                            {showKey[p.id] ? "Hide" : "Show"}
+                          </button>
+                          <button className="btn btn-primary btn-sm" onClick={() => handleSaveKey(p)}>Save</button>
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => setEditKey((prev) => { const n = { ...prev }; delete n[p.id]; return n; })}>
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="input-row" style={{ gap: 6 }}>
+                          <span className="text-muted" style={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {p.api_key ? "••••••••" : <em>not set</em>}
+                          </span>
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => setEditKey((prev) => ({ ...prev, [p.id]: p.api_key ?? "" }))}>
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <label className="toggle">
+                        <input type="checkbox" checked={!!p.enabled} onChange={() => handleToggle(p)} />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <button className="btn btn-ghost btn-sm text-danger" onClick={() => handleDelete(p.id)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <div style={{ fontWeight: 600, marginBottom: 10 }}>Add custom provider</div>
+      <form onSubmit={handleAdd}>
+        <div className="card">
+          <div className="card-body">
+            <div className="form-row">
+              <div className="form-group">
+                <label>Name</label>
+                <input type="text" placeholder="My Provider" value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div className="form-group" style={{ flex: 2 }}>
+                <label>Base URL</label>
+                <input type="url" placeholder="https://api.example.com/v1"
+                  value={form.baseUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>API Key (optional — can add later)</label>
+              <input type="password" placeholder="sk-…" value={form.apiKey}
+                onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
+                style={{ fontFamily: "monospace" }} />
+            </div>
+            <button className="btn btn-primary" type="submit" disabled={adding || !form.name.trim() || !form.baseUrl.trim()}>
+              {adding ? "Adding…" : "+ Add provider"}
+            </button>
+          </div>
+        </div>
       </form>
     </div>
   );
@@ -330,6 +510,9 @@ export default function SettingsPage() {
           <ModelsSection notify={notify} />
         </>
       )}
+
+      {/* ── Providers tab ────────────────────────────────────────────────────── */}
+      {tab === "Providers" && <ProvidersSection notify={notify} />}
 
       {/* ── Prompts tab ──────────────────────────────────────────────────────── */}
       {tab === "Prompts" && (
