@@ -5,15 +5,19 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start":   "node index.js",
     "dry-run": "node index.js --dry-run",
-    "schedule": "node scheduler.js"
+    "schedule": "node scheduler.js",
+    "admin":   "node admin/server.js"
   },
   "dependencies": {
-    "dotenv": "^16.4.7",
-    "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.16",
-    "openai": "^6.34.0",
-    "rss-parser": "^3.13.0"
+    "better-sqlite3": "^11.1.2",
+    "cors":           "^2.8.5",
+    "dotenv":         "^16.4.7",
+    "express":        "^4.21.1",
+    "node-cron":      "^3.0.3",
+    "nodemailer":     "^6.9.16",
+    "openai":         "^6.34.0",
+    "rss-parser":     "^3.13.0"
   }
 }

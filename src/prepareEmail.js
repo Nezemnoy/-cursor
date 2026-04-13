@@ -1,14 +1,17 @@
+import { getConfig } from "./config.js";
+
 // Builds both HTML and plain-text versions of the digest email.
 // `brief` is an optional { themes, recommendation } object from synthesizeDigest.
 export function prepareEmail(articles, brief = null, date = new Date()) {
+  const { subjectPrefix } = getConfig();
   const dateStr = date.toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
-  const html = buildHtml(articles, brief, dateStr);
-  const text = buildText(articles, brief, dateStr);
+  const html = buildHtml(articles, brief, dateStr, subjectPrefix);
+  const text = buildText(articles, brief, dateStr, subjectPrefix);
 
-  return { subject: `AI News Digest — ${dateStr}`, html, text };
+  return { subject: `${subjectPrefix} — ${dateStr}`, html, text };
 }
 
 const ACTION_SIGNAL_COLORS = {
@@ -23,7 +26,7 @@ function actionSignalBadge(signal) {
   return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;font-family:sans-serif;background:${colors.bg};border:1px solid ${colors.border};color:${colors.text};">${escHtml(signal)}</span>`;
 }
 
-function buildHtml(articles, brief, dateStr) {
+function buildHtml(articles, brief, dateStr, title) {
   const briefSection = brief ? `
         <tr>
           <td style="padding:20px 32px;background:#eff6ff;border-bottom:1px solid #bfdbfe;">
@@ -67,7 +70,7 @@ function buildHtml(articles, brief, dateStr) {
         <!-- Header -->
         <tr>
           <td style="background:#1d4ed8;padding:28px 32px;">
-            <h1 style="margin:0;font-size:22px;color:#ffffff;font-family:sans-serif;">AI News Digest</h1>
+            <h1 style="margin:0;font-size:22px;color:#ffffff;font-family:sans-serif;">${escHtml(title)}</h1>
             <p style="margin:4px 0 0;font-size:14px;color:#bfdbfe;font-family:sans-serif;">${dateStr}</p>
           </td>
         </tr>
@@ -77,7 +80,7 @@ function buildHtml(articles, brief, dateStr) {
         <tr>
           <td style="padding:24px 32px 0;">
             <p style="margin:0;font-size:14px;color:#6b7280;font-family:sans-serif;">
-              Here are today's top ${articles.length} AI stories, curated and summarized by Gemini.
+              Here are today's top ${articles.length} AI stories, curated and summarized by AI.
             </p>
           </td>
         </tr>
@@ -104,7 +107,7 @@ function buildHtml(articles, brief, dateStr) {
 </html>`;
 }
 
-function buildText(articles, brief, dateStr) {
+function buildText(articles, brief, dateStr, title) {
   const briefSection = brief
     ? `--- CTO Brief ---\n${brief.themes}\n\nThis week: ${brief.recommendation}\n\n`
     : "";
@@ -116,7 +119,7 @@ function buildText(articles, brief, dateStr) {
     (a.strategicTake ? `\n   Strategic take: ${a.strategicTake}` : "")
   ).join("\n\n");
 
-  return `AI News Digest — ${dateStr}\n\n${briefSection}${lines}\n\n---\nGenerated automatically · powered by OpenRouter\n`;
+  return `${title} — ${dateStr}\n\n${briefSection}${lines}\n\n---\nGenerated automatically · powered by OpenRouter\n`;
 }
 
 function escHtml(str = "") {
