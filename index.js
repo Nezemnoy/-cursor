@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { fetchArticles } from "./src/fetchArticles.js";
 import { filterArticles } from "./src/filterArticles.js";
-import { summarizeAll } from "./src/summarize.js";
+import { summarizeAll, synthesizeDigest } from "./src/summarize.js";
 import { prepareEmail } from "./src/prepareEmail.js";
 import { sendEmail } from "./src/sendEmail.js";
 
@@ -18,7 +18,10 @@ console.log(`  ${filtered.length} articles passed relevance filter`);
 console.log("Summarizing with AI...");
 const summarized = await summarizeAll(filtered);
 
-const email = prepareEmail(summarized);
+console.log("Synthesizing CTO brief...");
+const brief = await synthesizeDigest(summarized);
+
+const email = prepareEmail(summarized, brief);
 
 if (dryRun) {
   console.log("\n--- DRY RUN: email not sent ---\n");
