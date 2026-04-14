@@ -15,6 +15,8 @@ export function getAiClient(baseURL, apiKey) {
 function isQuotaError(err) {
   if (err?.status === 402) return true;
   if (err?.status === 404) return true; // model not found / no endpoints
+  if (err?.status === 429) return true; // daily/rate limit exhausted — try next model
+  if (err?.status === 400) return true; // context length / unsupported params — try next model
   const msg = (err?.message ?? "").toLowerCase();
   return (
     msg.includes("insufficient_credits") ||
@@ -69,6 +71,7 @@ export async function withModelFallback(fn) {
 
     for (let i = 0; i < models.length; i++) {
       const model = models[i];
+      console.log(`  [${provider.name}] model: ${model}`);
       try {
         return await withRetry(() => fn(ai, model));
       } catch (err) {

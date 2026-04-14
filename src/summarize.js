@@ -34,6 +34,8 @@ export async function summarizeAll(articles) {
   const results = [];
   for (let i = 0; i < articles.length; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, delay));
+    const title = articles[i].title.slice(0, 60) + (articles[i].title.length > 60 ? "…" : "");
+    console.log(`  [${i + 1}/${articles.length}] "${title}"`);
     results.push(await summarizeArticle(articles[i]));
   }
   return results;

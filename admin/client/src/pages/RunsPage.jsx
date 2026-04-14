@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { getRuns, getRunLog, triggerRun } from "../api.js";
+import { getRuns, getRunLog, triggerRun, stopRun } from "../api.js";
 
 function StatusBadge({ status }) {
   const cls = status === "success" ? "badge-success"
             : status === "error"   ? "badge-error"
+            : status === "stopped" ? "badge-error"
             :                        "badge-running";
   return <span className={`badge ${cls}`}>{status}</span>;
 }
@@ -71,6 +72,16 @@ export default function RunsPage() {
     }
   }
 
+  async function handleStop() {
+    if (!activeId) return;
+    try {
+      await stopRun(activeId);
+      notify("Run stopped");
+    } catch {
+      notify("Failed to stop run", "error");
+    }
+  }
+
   function handleRowClick(id) {
     setActiveId((prev) => (prev === id ? null : id));
     setLog("");
@@ -86,9 +97,16 @@ export default function RunsPage() {
     <>
       <div className="page-header">
         <h1 className="page-title">Runs</h1>
-        <button className="btn btn-run" onClick={handleRun} disabled={running}>
-          {running ? "⏳ Running…" : "▶ Run Now"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {running && activeId && (
+            <button className="btn btn-danger" onClick={handleStop}>
+              ⏹ Stop
+            </button>
+          )}
+          <button className="btn btn-run" onClick={handleRun} disabled={running}>
+            {running ? "⏳ Running…" : "▶ Run Now"}
+          </button>
+        </div>
       </div>
 
       {/* Live log */}

@@ -33,3 +33,4 @@ export const deleteRecipient = (id)     => req(`/api/recipients/${id}`, { method
 export const getRuns     = ()       => req("/api/runs");
 export const getRunLog   = (id)     => req(`/api/runs/${id}/log`);
 export const triggerRun  = ()       => req("/api/run", { method: "POST" });
+export const stopRun     = (id)     => req(`/api/run/${id}`, { method: "DELETE" });

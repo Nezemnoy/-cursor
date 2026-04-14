@@ -128,6 +128,8 @@ app.delete("/api/recipients/:id", (req, res) => {
 
 // ── Runs ──────────────────────────────────────────────────────────────────────
 
+const activeRuns = new Map(); // runId → child process
+
 app.get("/api/runs", (_req, res) => {
   res.json(getRuns());
 });
@@ -147,22 +149,35 @@ app.post("/api/run", (_req, res) => {
     env: { ...process.env, FORCE_COLOR: "0" },
   });
 
+  activeRuns.set(runId, child);
+
   let articleCount = null;
 
   const onData = (data) => {
     const text = data.toString();
     process.stdout.write(text);
     appendRunLog(runId, text);
-    const m = text.match(/(\d+) articles passed relevance filter/);
+    const m = text.match(/(\d+) \/ \d+ articles passed/);
     if (m) articleCount = Number(m[1]);
   };
 
   child.stdout.on("data", onData);
   child.stderr.on("data", onData);
 
-  child.on("close", (code) => {
-    finishRun(runId, { status: code === 0 ? "success" : "error", articleCount });
+  child.on("close", (code, signal) => {
+    activeRuns.delete(runId);
+    const status = signal === "SIGTERM" ? "stopped" : code === 0 ? "success" : "error";
+    finishRun(runId, { status, articleCount });
   });
+});
+
+app.delete("/api/run/:id", (req, res) => {
+  const runId = Number(req.params.id);
+  const child = activeRuns.get(runId);
+  if (!child) return res.status(404).json({ error: "No active run with this id" });
+  appendRunLog(runId, "\n[Stopped by user]\n");
+  child.kill("SIGTERM");
+  res.json({ ok: true });
 });
 
 // ── Static (React build) ──────────────────────────────────────────────────────

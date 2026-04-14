@@ -11,16 +11,22 @@ export async function fetchArticles() {
     feeds.map(({ url }) => parser.parseURL(url))
   );
 
+  let totalRaw = 0;
   const items = results.flatMap((r, i) => {
     if (r.status === "rejected") {
-      console.warn(`Feed "${feeds[i].source}" failed: ${r.reason.message}`);
+      console.warn(`  ✗ Feed "${feeds[i].source}" failed: ${r.reason.message}`);
       return [];
     }
+    const count = r.value.items.length;
+    totalRaw += count;
+    console.log(`  ✓ ${feeds[i].source}: ${count} items`);
     return r.value.items.map((item) => ({ ...item, _source: feeds[i].source }));
   });
 
+  console.log(`  Fetched ${totalRaw} raw items from ${results.filter((r) => r.status === "fulfilled").length} feeds`);
+
   const seen = new Set();
-  return items
+  const filtered = items
     .filter(({ title, isoDate }) => {
       if (!title || seen.has(title)) return false;
       if (isoDate && new Date(isoDate).getTime() < cutoff) return false;
@@ -39,4 +45,7 @@ export async function fetchArticles() {
       pubDate: item.isoDate ?? null,
       source:  item._source,
     }));
+
+  console.log(`  After dedup + recency filter (${hoursBack}h): ${filtered.length} articles`);
+  return filtered;
 }
