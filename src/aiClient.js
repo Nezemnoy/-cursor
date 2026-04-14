@@ -27,14 +27,35 @@ function isQuotaError(err) {
   );
 }
 
+// Returns true when the daily/total free quota is gone — retrying won't help.
+function isDailyLimitError(err) {
+  const msg = (err?.message ?? "").toLowerCase();
+  return (
+    msg.includes("per-day") ||
+    msg.includes("per_day") ||
+    msg.includes("daily") ||
+    msg.includes("free-models-per-day") ||
+    msg.includes("tokens per day") ||
+    msg.includes("requests per day")
+  );
+}
+
+function quotaReason(err) {
+  if (isDailyLimitError(err))          return "daily limit exhausted";
+  if (err?.status === 404)             return "model not found / no endpoints";
+  if (err?.status === 400)             return "context too long / unsupported params";
+  if (err?.status === 402)             return "insufficient credits";
+  return "quota/credits exhausted";
+}
+
 function isProviderError(err) {
-  // Treat auth errors and provider-level failures as "skip provider"
   if (err?.status === 401 || err?.status === 403) return true;
   const msg = (err?.message ?? "").toLowerCase();
   return msg.includes("invalid api key") || msg.includes("authentication");
 }
 
-// Retries fn() on 429 rate-limit errors for a single model.
+// Retries fn() on temporary (per-minute) 429 rate-limit errors.
+// Daily limit errors are thrown immediately — no point waiting.
 export async function withRetry(fn, maxRetries) {
   const retries = maxRetries ?? getConfig().maxRetries;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -42,11 +63,11 @@ export async function withRetry(fn, maxRetries) {
       return await fn();
     } catch (err) {
       const is429 = err?.status === 429 || err?.message?.includes("429");
-      if (!is429 || attempt === retries) throw err;
+      if (!is429 || isDailyLimitError(err) || attempt === retries) throw err;
 
       const retryAfter = err?.headers?.["retry-after"];
       const waitSec = retryAfter ? parseInt(retryAfter, 10) : Math.pow(2, attempt + 1) * 5;
-      console.warn(`  Rate-limited; retrying in ${waitSec}s... (attempt ${attempt + 1}/${retries})`);
+      console.warn(`  Rate-limited (per-minute); retrying in ${waitSec}s… (attempt ${attempt + 1}/${retries})`);
       await new Promise((r) => setTimeout(r, waitSec * 1000));
     }
   }
@@ -71,23 +92,24 @@ export async function withModelFallback(fn) {
 
     for (let i = 0; i < models.length; i++) {
       const model = models[i];
-      console.log(`  [${provider.name}] model: ${model}`);
+      console.log(`  [${provider.name}] trying: ${model}`);
       try {
         return await withRetry(() => fn(ai, model));
       } catch (err) {
         if (isProviderError(err)) {
-          console.warn(`  Provider "${provider.name}" auth failed, switching provider…`);
-          break; // try next provider
+          console.warn(`  [${provider.name}] auth failed — switching provider…`);
+          break;
         }
         if (isQuotaError(err)) {
+          const reason = quotaReason(err);
           if (i < models.length - 1) {
-            console.warn(`  [${provider.name}] Model "${model}" unavailable, trying "${models[i + 1]}"…`);
+            console.warn(`  [${provider.name}] "${model}" — ${reason}, trying next model…`);
             continue;
           }
-          console.warn(`  [${provider.name}] All models exhausted, switching provider…`);
-          break; // try next provider
+          console.warn(`  [${provider.name}] "${model}" — ${reason}, all models exhausted, switching provider…`);
+          break;
         }
-        throw err; // unexpected error — surface it
+        throw err;
       }
     }
   }
