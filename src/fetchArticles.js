@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
 import { getConfig } from "./config.js";
 
-const parser = new Parser();
+const parser = new Parser({ timeout: 10000 }); // 10s max per feed (default is 60s)
 
 export async function fetchArticles() {
   const { feeds, hoursBack } = getConfig();
