@@ -75,8 +75,12 @@ export async function withRetry(fn, maxRetries) {
   }
 }
 
+// Models that hit quota/credits this pipeline run — skipped on subsequent calls.
+// Reset automatically on each new run (fresh process).
+const _exhausted = new Set();
+
 // Iterates enabled providers (by priority), then models within each provider.
-// On quota/unavailability: try next model → then next provider.
+// On quota/unavailability: marks model exhausted for this run, tries next.
 export async function withModelFallback(fn) {
   const { providers, models, apiKey: globalApiKey } = getConfig();
 
@@ -94,6 +98,12 @@ export async function withModelFallback(fn) {
 
     for (let i = 0; i < models.length; i++) {
       const model = models[i];
+
+      if (_exhausted.has(`${provider.name}:${model}`)) {
+        console.log(`  [${provider.name}] skipping "${model}" — exhausted this run`);
+        continue;
+      }
+
       console.log(`  [${provider.name}] trying: ${model}`);
       try {
         return await withRetry(() => fn(ai, model));
@@ -104,6 +114,7 @@ export async function withModelFallback(fn) {
         }
         if (isQuotaError(err)) {
           const reason = quotaReason(err);
+          _exhausted.add(`${provider.name}:${model}`);
           if (i < models.length - 1) {
             console.warn(`  [${provider.name}] "${model}" — ${reason}, trying next model…`);
             continue;
