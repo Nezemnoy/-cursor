@@ -5,6 +5,7 @@ export function getAiClient(baseURL, apiKey) {
   return new OpenAI({
     baseURL,
     apiKey,
+    timeout: 45000, // 45s max per request (SDK default is 600s)
     defaultHeaders: {
       "HTTP-Referer": "https://github.com/ai-news-digest",
       "X-Title": "AI News Digest",
@@ -18,6 +19,7 @@ function isQuotaError(err) {
   if (err?.status === 429) return true; // daily/rate limit exhausted — try next model
   if (err?.status === 400) return true; // context length / unsupported params — try next model
   const msg = (err?.message ?? "").toLowerCase();
+  if (msg.includes("timeout") || msg.includes("timed out") || err?.code === "ETIMEDOUT") return true;
   return (
     msg.includes("insufficient_credits") ||
     msg.includes("no endpoints") ||
