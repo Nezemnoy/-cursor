@@ -9,19 +9,19 @@ const DATA_DIR = join(__dirname, "../data");
 const DB_PATH = join(DATA_DIR, "config.db");
 
 const DEFAULT_FEEDS = [
-  { url: "https://openai.com/news/rss.xml",                            name: "OpenAI" },
-  { url: "https://www.anthropic.com/rss.xml",                          name: "Anthropic" },
-  { url: "https://deepmind.google/blog/rss.xml",                       name: "DeepMind" },
-  { url: "https://ai.meta.com/blog/feed/",                             name: "Meta AI" },
-  { url: "https://huggingface.co/blog/feed.xml",                       name: "Hugging Face" },
-  { url: "https://www.deeplearning.ai/the-batch/feed/",                name: "The Batch" },
-  { url: "https://importai.substack.com/feed",                         name: "Import AI" },
-  { url: "https://www.interconnects.ai/feed",                          name: "Interconnects" },
-  { url: "https://simonwillison.net/atom/everything/",                  name: "Simon Willison" },
-  { url: "https://venturebeat.com/category/ai/feed/",                  name: "VentureBeat AI" },
-  { url: "https://the-decoder.com/feed/",                              name: "The Decoder" },
-  { url: "https://www.wired.com/feed/tag/artificial-intelligence/rss", name: "Wired AI" },
-  { url: "https://www.technologyreview.com/feed/",                     name: "MIT Tech Review" },
+  { url: "https://openai.com/news/rss.xml",                                     name: "OpenAI" },
+  { url: "https://feeds.arstechnica.com/arstechnica/index",                     name: "Ars Technica" },
+  { url: "https://deepmind.google/blog/rss.xml",                                name: "DeepMind" },
+  { url: "https://engineering.fb.com/feed/",                                    name: "Meta Engineering" },
+  { url: "https://huggingface.co/blog/feed.xml",                                name: "Hugging Face" },
+  { url: "https://techcrunch.com/tag/artificial-intelligence/feed/",            name: "TechCrunch AI" },
+  { url: "https://importai.substack.com/feed",                                  name: "Import AI" },
+  { url: "https://www.interconnects.ai/feed",                                   name: "Interconnects" },
+  { url: "https://simonwillison.net/atom/everything/",                           name: "Simon Willison" },
+  { url: "https://venturebeat.com/category/ai/feed/",                           name: "VentureBeat AI" },
+  { url: "https://the-decoder.com/feed/",                                       name: "The Decoder" },
+  { url: "https://www.wired.com/feed/rss",                                      name: "Wired" },
+  { url: "https://www.technologyreview.com/feed/",                              name: "MIT Tech Review" },
 ];
 
 const DEFAULT_MODELS = [
